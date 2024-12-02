@@ -1,0 +1,22 @@
+/*
+/*/
+!*.R
+!.gitignore
+!README.Rmd
+!README.md
+!/data/
+!/docs/
+# !latest_model/
+!R
+!*.qmd
+!*.rmd
+.Rproj.user
+*.DS_Store
+~$*
+*.html
+*.docx
+*.log
+*.pdf
+*.rmarkdown
+*.png
+._*
