@@ -2,7 +2,7 @@
 ##
 ## Script name: A SAM draft model for beaked redfish
 ##
-## Purpose of script: A quick model hacked from the SCAA model data
+## Purpose of script: A quick model hacked from the SCAA model data. Imitates the approach presented by Olav Nikolai Breivik in NSS Herring example during the SAM course. Some of the code is his (or he has borrowed it from somewhere).
 ##
 ## Date Created: 2024-12-03
 ##
