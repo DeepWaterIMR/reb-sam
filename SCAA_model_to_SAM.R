@@ -118,7 +118,7 @@ dummy1[dummy1 == 0] <- 1
 nm <- dummy0
 nm[nm == 0] <- 0.07
 
-# Setup SAM
+# Setup SAM ####
 
 dat <- setup.sam.data(
   surveys = surveys,
@@ -137,9 +137,11 @@ confDef <- defcon(dat)
 
 par = defpar(dat,confDef)
 
-# Fit SAM
+# Fit SAM ####
 
 fit = sam.fit(dat,confDef,par)
+
+# Code copied from the Olav Nikolai example ####
 
 #Usefull commands
 AIC(fit) #Calcualte AIC
