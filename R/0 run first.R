@@ -15,7 +15,7 @@
 ##
 ## ---------------------------
 
-### Clear workspace (comment to )
+### Clear workspace
 
 rm(list = ls())
 
