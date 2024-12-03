@@ -19,11 +19,9 @@ library(stockassessment)
 
 ### Source or list custom functions used within the script ####
 
-### Read data ###
+# Read and manipulate data ####
 
-## ---------------------------
-
-## Catches
+### Catches ####
 
 cn <- 
   list("demersal" = 
@@ -38,7 +36,7 @@ cn <-
          as.matrix()
   )
 
-## Surveys
+### Surveys ####
 
 survey_names <- c("EcosystemSurvey", "WinterSurvey", "RussianSurvey", "WGIDEEPS")
 
@@ -89,7 +87,7 @@ surveys <- setNames(
     return(out)
   }), survey_names)
 
-## Maturity proportion
+### Maturity proportion ####
 
 mo <- read_table("data/from scaa model/MaturityAtAge.txt",
                  show_col_types = FALSE) %>% 
@@ -97,7 +95,7 @@ mo <- read_table("data/from scaa model/MaturityAtAge.txt",
   setNames(gsub("\\+", "", colnames(.))) %>% 
   as.matrix()
 
-## Weight at age
+### Weight at age ####
 
 sw <- read_table("data/from scaa model/WeightAtAge.txt",
                  show_col_types = FALSE) %>% 
@@ -105,7 +103,7 @@ sw <- read_table("data/from scaa model/WeightAtAge.txt",
   setNames(gsub("\\+", "", colnames(.))) %>% 
   as.matrix()
 
-## Dummy datasets
+### Dummy datasets ####
 
 dummy0 <- mo
 dummy0[dummy0 != 0] <- 0
@@ -113,12 +111,14 @@ dummy0[dummy0 != 0] <- 0
 dummy1 <- dummy0
 dummy1[dummy1 == 0] <- 1
 
-## Natural mortality (modify as needed)
+### Natural mortality ####
 
 nm <- dummy0
-nm[nm == 0] <- 0.07
+nm[nm == 0] <- 0.07 # modify as needed
 
-# Setup SAM ####
+# SAM ####
+ 
+### Setup SAM ####
 
 dat <- setup.sam.data(
   surveys = surveys,
@@ -137,7 +137,7 @@ confDef <- defcon(dat)
 
 par = defpar(dat,confDef)
 
-# Fit SAM ####
+### Fit SAM ####
 
 fit = sam.fit(dat,confDef,par)
 
