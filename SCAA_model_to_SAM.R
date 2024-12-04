@@ -10,14 +10,28 @@
 
 ### Clear workspace (comment to )
 
-rm(list = ls())
+# rm(list = ls())
 
 ### Load packages ####
 
 library(tidyverse)
 library(stockassessment)
+library(cowplot)
 
 ### Source or list custom functions used within the script ####
+
+## ggplot theme
+
+theme_cust <- theme_classic(base_size = 8) %+replace%
+  theme(strip.background = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        plot.margin = margin(c(5.5, 10, 5.5, 5.5)))
+
+theme_set(theme_cust) # Set default theme globally for the entire project
+
 
 # Read and manipulate data ####
 
@@ -35,6 +49,28 @@ cn <-
          setNames(gsub("\\+", "", colnames(.))) %>% 
          as.matrix()
   )
+
+## ####
+
+# lapply(seq_along(cn), function(i) {
+#   as_tibble(cn[[i]], rownames = "year") %>% 
+#     pivot_longer(-year) %>% 
+#     add_column(type = names(cn)[i], .before = 1)
+# }) %>% bind_rows() %>% 
+#   mutate(
+#     name = 
+#       factor(name, 
+#              rev(as.integer(unique(name)))),
+#     year = as.integer(year)) %>% 
+#   ggplot(aes(x = year, y = value/1e3, fill = name)) +
+#   geom_col() +
+#   facet_wrap(~type, ncol = 1) +
+#   scale_fill_viridis_d() +
+#   scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+#   labs(x = "Year", y = "Catch-at-age (millions?)", fill = "Age")
+
+## ####
+
 
 ### Surveys ####
 
@@ -67,7 +103,7 @@ surveys <- setNames(
         column_to_rownames("Year") %>% 
         select(where(~!all(is.na(.x)))) %>% 
         as.matrix()
-        
+      
       
     } else {
       out <- out %>% column_to_rownames("Year") %>% 
@@ -87,6 +123,28 @@ surveys <- setNames(
     return(out)
   }), survey_names)
 
+## ####
+
+# lapply(seq_along(surveys), function(i) {
+#   as_tibble(surveys[[i]], rownames = "year") %>% 
+#     pivot_longer(-year) %>% 
+#     add_column(type = names(surveys)[i], .before = 1)
+# }) %>% bind_rows() %>% 
+#   mutate(
+#     name = 
+#       factor(name, 
+#              rev(as.integer(unique(name)))),
+#     year = as.integer(year)) %>% 
+#   ggplot(aes(x = year, y = value/1e3, fill = name)) +
+#   geom_col() +
+#   facet_wrap(~type, ncol = 1, scales = "free_y") +
+#   scale_fill_viridis_d() +
+#   scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+#   labs(x = "Year", y = "Index", fill = "Age")
+
+## ####
+
+
 ### Maturity proportion ####
 
 mo <- read_table("data/from scaa model/MaturityAtAge.txt",
@@ -95,6 +153,22 @@ mo <- read_table("data/from scaa model/MaturityAtAge.txt",
   setNames(gsub("\\+", "", colnames(.))) %>% 
   as.matrix()
 
+## ####
+
+# mo %>% 
+#   as_tibble(rownames = "year") %>% 
+#   pivot_longer(-year) %>% 
+#   mutate(name = as.integer(name),
+#          year = as.integer(year)) %>% 
+#   ggplot(aes(name, value, color = year, group = year)) +
+#   geom_path() +
+#   scale_color_viridis_c(direction = -1) +
+#   scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+#   labs(x = "Age", y = "Maturity proportion", color = "Age") +
+#   theme(legend.position = "bottom")
+
+## ####
+
 ### Weight at age ####
 
 sw <- read_table("data/from scaa model/WeightAtAge.txt",
@@ -102,6 +176,25 @@ sw <- read_table("data/from scaa model/WeightAtAge.txt",
   column_to_rownames("Year") %>% 
   setNames(gsub("\\+", "", colnames(.))) %>% 
   as.matrix()
+
+## ####
+
+# sw %>%
+#   as_tibble(rownames = "year") %>%
+#   pivot_longer(-year) %>%
+#   mutate(name = as.integer(name),
+#          year = as.integer(year)) %>%
+#   ggplot(aes(name, value, color = year, group = year)) +
+#   geom_path() +
+#   scale_color_viridis_c(direction = -1) +
+#   scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+#   scale_x_continuous(
+#     limits = c(0,round(as.integer(colnames(sw)[length(colnames(sw))])/10)*10),
+#     expand = c(0,0)) +
+#   labs(x = "Age", y = "Weight (kg)", color = "Age") +
+#   theme(legend.position = "bottom")
+
+## ####
 
 ### Dummy datasets ####
 
@@ -117,7 +210,7 @@ nm <- dummy0
 nm[nm == 0] <- 0.07 # modify as needed
 
 # SAM ####
- 
+
 ### Setup SAM ####
 
 dat <- setup.sam.data(

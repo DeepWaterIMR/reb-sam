@@ -1,0 +1,341 @@
+---
+title: "Beaked redfish exploratory models: SCAA to SAM model conversion"
+subtitle: "Exploratory models for the Northeast Arctic beaked redfish"
+# author:
+#    - name: Mikko Vihtakari
+#      affiliations:
+#       - ref: imr
+# affiliations: 
+#    - id: imr 
+#      name: Institute of Marine Research, Norway
+date: today
+published-title: "Version"
+format:
+  html:
+    self-contained: true
+    fig-width: 9
+    fig-height: 6
+    code-fold: true
+    # output-file: Reb_SCAA_model_to_SAM_v1
+    toc: true
+execute:
+  message: false
+  warning: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, eval = TRUE, include = FALSE}
+
+# knitr::opts_knit$set(root.dir = '../../') 
+
+knitr::knit_hooks$set(timeit = local({
+  now = NULL
+  function(before, options) {
+    if (before) {
+      now <<- Sys.time()
+    } else {
+      res = round(difftime(Sys.time(), now, units = "mins"), 1)
+      now <<- NULL
+      # use options$label if you want the chunk label as well
+      print(paste('Time:', as.character(res), "min"))
+    }
+  }})
+)
+```
+
+```{r packages, timeit = TRUE}
+# Clear the workspace for manual code runs
+
+rm(list = ls()) 
+
+############## ####
+#### Libraries ----
+
+## Package names
+packages <- c("tidyverse", "stockassessment", "scales", "cowplot",
+              "lubridate")
+
+## Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+
+# if("remotes" %in% packages[!installed_packages]) {
+#   install.packages("remotes")
+# }
+
+if (any(installed_packages == FALSE)) {
+  
+  if("stockassessment" %in% packages[!installed_packages]) {
+    install.packages('stockassessment',
+                 repos=c(CRAN="https://cloud.r-project.org/",
+		         SAM='https://fishfollower.r-universe.dev'))
+  }
+  
+  installed_packages <- packages %in% rownames(installed.packages())
+  
+  install.packages(packages[!installed_packages])
+}
+
+## Load packages
+invisible(lapply(packages, library, character.only = TRUE))
+
+# Backend for parallel
+
+if(Sys.info()["sysname"] == "Linux") {
+  library(flexiblas)
+  flexiblas_switch(flexiblas_load_backend("OPENBLAS-THREADS"))
+}
+
+################### ###
+# Custom functions ----
+
+source("R/make_table.R") # a function to make tables
+
+################ ##
+# ggplot theme ----
+
+theme_cust <- theme_classic(base_size = 10) %+replace%
+  theme(strip.background = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        legend.background = element_blank(),
+        legend.box.background = element_blank(),
+        plot.margin = margin(c(5.5, 10, 5.5, 5.5)))
+
+theme_set(theme_cust) # Set default theme globally for the entire project
+```
+
+
+# Introduction
+
+This document contains exploratory conversion of the Statistical Catch at Age (SCAA) model used in the assessment of the Northeast Arctic beaked redfish stock until 2024 to a SAM assessment model. 
+
+# Data
+
+The data are reformatted from direct input data for the SCAA model. 
+
+## Catches
+
+```{r}
+#| label: fig-catches
+#| fig-cap: Catches by age (fill) for each fleet presumably in millions. Actual catch numbers in the data have been divided by 1000.
+# #| fig-height: 
+
+### Catches ####
+
+cn <- 
+  list("demersal" = 
+         read_table("data/from scaa model/CatchAtAge.txt") %>% 
+         column_to_rownames("Year") %>% 
+         setNames(gsub("\\+", "", colnames(.))) %>% 
+         as.matrix(),
+       "pelagic" = 
+         read_table("data/from scaa model/PelagicCatchAtAge.txt") %>% 
+         column_to_rownames("Year") %>% 
+         setNames(gsub("\\+", "", colnames(.))) %>% 
+         as.matrix()
+  )
+
+## ####
+
+lapply(seq_along(cn), function(i) {
+  as_tibble(cn[[i]], rownames = "year") %>% 
+    pivot_longer(-year) %>% 
+    add_column(type = names(cn)[i], .before = 1)
+}) %>% bind_rows() %>% 
+  mutate(
+    name = 
+      factor(name, 
+             rev(as.integer(unique(name)))),
+    year = as.integer(year)) %>% 
+  ggplot(aes(x = year, y = value/1e3, fill = name)) +
+  geom_col() +
+  facet_wrap(~type, ncol = 1) +
+  scale_fill_viridis_d() +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  labs(x = "Year", y = "Catch-at-age (millions?)", fill = "Age")
+
+## ####
+```
+
+## Surveys
+
+```{r}
+#| label: fig-surveys
+#| fig-cap: Survey data by age (fill). The unit is unclear. Individuals?
+#| fig-height: 8
+
+### Surveys ####
+
+survey_names <- c("EcosystemSurvey", "WinterSurvey", "RussianSurvey", "WGIDEEPS")
+
+surveys <- setNames(
+  lapply(survey_names, function(k){
+    # print(k)
+    
+    out <- read_table(paste0("data/from scaa model/", k, ".txt"),
+                      show_col_types = FALSE) %>%
+      filter(Year > 1991) %>% 
+      setNames(gsub("\\+", "", colnames(.))) %>% 
+      mutate(across(everything(), as.numeric)) %>%
+      mutate(across(everything(), ~if_else(is.nan(.), NA, .))) %>% 
+      suppressWarnings()
+    
+    
+    test <- suppressWarnings(as.integer(colnames(out)))
+    test <- test[!is.na(test)]
+    
+    if(any(test > 19)) {
+      
+      out <- out %>% 
+        pivot_longer(cols = -Year) %>% 
+        mutate(name = as.integer(name)) %>% 
+        mutate(name = if_else(name > 19, 19, name)) %>% 
+        pivot_wider(values_fn = ~ sum(.x, na.rm = TRUE))  %>% 
+        # mutate(across(everything(), ~if_else(. == 0, NA, .))) # remove 0s
+        column_to_rownames("Year") %>% 
+        select(where(~!all(is.na(.x)))) %>% 
+        as.matrix()
+      
+      
+    } else {
+      out <- out %>% column_to_rownames("Year") %>% 
+        select(where(~!all(is.na(.x)))) %>% 
+        as.matrix()
+    }
+    
+    attr(out, "time") <- 
+      case_when(k == "EcosystemSurvey" ~ rep(9/12, 2),
+                k == "WinterSurvey" ~ rep(2/12, 2),
+                k == "WGIDEEPS" ~ rep(7/12, 2),
+                k == "RussianSurvey" ~ rep(9/12, 2) # find correct time here
+      )
+    
+    attr(out, "twofirst") <- c(1,1)
+    
+    return(out)
+  }), survey_names)
+
+
+## ####
+
+lapply(seq_along(surveys), function(i) {
+  as_tibble(surveys[[i]], rownames = "year") %>% 
+    pivot_longer(-year) %>% 
+    add_column(type = names(surveys)[i], .before = 1)
+}) %>% bind_rows() %>% 
+  mutate(
+    name = 
+      factor(name, 
+             rev(as.integer(unique(name)))),
+    year = as.integer(year)) %>% 
+  ggplot(aes(x = year, y = value, fill = name)) +
+  geom_col() +
+  facet_wrap(~type, ncol = 1, scales = "free_y") +
+  scale_fill_viridis_d() +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  labs(x = "Year", y = "Index", fill = "Age")
+
+## ####
+```
+
+## Maturity
+
+```{r}
+#| label: fig-maturity
+#| fig-cap: Maturity proportions in the data. The proportions are assumed similar for all years.
+# #| fig-height: 8
+
+### Maturity proportion ####
+
+mo <- read_table("data/from scaa model/MaturityAtAge.txt",
+                 show_col_types = FALSE) %>% 
+  column_to_rownames("Year") %>% 
+  setNames(gsub("\\+", "", colnames(.))) %>% 
+  as.matrix()
+
+## ####
+
+mo %>% 
+  as_tibble(rownames = "year") %>% 
+  pivot_longer(-year) %>% 
+  mutate(name = as.integer(name),
+         year = as.integer(year)) %>% 
+  ggplot(aes(name, value, color = year, group = year)) +
+  geom_path() +
+  scale_color_viridis_c(direction = -1) +
+  scale_x_continuous(
+    limits = c(0,round(as.integer(colnames(mo)[length(colnames(mo))])/10)*10), 
+    expand = c(0,0)) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  labs(x = "Age", y = "Maturity proportion", color = "Age") +
+  theme(legend.position = "bottom")
+
+## ####
+```
+
+## Weight
+
+```{r}
+#| label: fig-weight-at-age
+#| fig-cap: Weight at age data. The proportions are assumed similar for all years.
+# #| fig-height: 8
+
+### Weight at age ####
+
+sw <- read_table("data/from scaa model/WeightAtAge.txt",
+                 show_col_types = FALSE) %>% 
+  column_to_rownames("Year") %>% 
+  setNames(gsub("\\+", "", colnames(.))) %>% 
+  as.matrix()
+
+## ####
+
+sw %>%
+  as_tibble(rownames = "year") %>%
+  pivot_longer(-year) %>%
+  mutate(name = as.integer(name),
+         year = as.integer(year)) %>%
+  ggplot(aes(name, value, color = year, group = year)) +
+  geom_path() +
+  scale_color_viridis_c(direction = -1) +
+  scale_y_continuous(expand = expansion(mult = c(0, .1))) +
+  scale_x_continuous(
+    limits = c(0,round(as.integer(colnames(sw)[length(colnames(sw))])/10)*10),
+    expand = c(0,0)) +
+  labs(x = "Age", y = "Weight (kg)", color = "Age") +
+  theme(legend.position = "bottom")
+
+## ####
+```
+
+## Natural mortality
+
+```{r}
+M <- 0.07
+
+nm <- mo
+nm[nm != M] <- M
+```
+
+Natural mortality was assumed as `r M` for all 
+
+## Dummy datasets
+
+These dummy datasets contain only 0s or 1s encompassing the ages and years in the other datasets. They are used in the model where datasets with only 0s or 1s are required. 
+
+```{r}
+#| label: tbl-dummy
+#| tbl-cap: Dummy dataset containing zeros.
+
+dummy0 <- mo
+dummy0[dummy0 != 0] <- 0
+
+dummy1 <- dummy0
+dummy1[dummy1 == 0] <- 1
+
+# make_table(dummy0)
+```
+
+
+# SAM
