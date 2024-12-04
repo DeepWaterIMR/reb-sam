@@ -10,7 +10,7 @@
 
 ### Clear workspace (comment to )
 
-# rm(list = ls())
+rm(list = ls())
 
 ### Load packages ####
 
@@ -226,13 +226,13 @@ dat <- setup.sam.data(
   natural.mortality=nm, 
   land.frac = dummy1)
 
-confDef <- defcon(dat)
+conf <- defcon(dat)
 
-par = defpar(dat,confDef)
+par = defpar(dat,conf)
 
 ### Fit SAM ####
 
-fit = sam.fit(dat,confDef,par)
+fit = sam.fit(dat,conf,par)
 
 # Code copied from the Olav Nikolai example ####
 

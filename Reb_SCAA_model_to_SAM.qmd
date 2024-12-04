@@ -67,8 +67,8 @@ if (any(installed_packages == FALSE)) {
   
   if("stockassessment" %in% packages[!installed_packages]) {
     install.packages('stockassessment',
-                 repos=c(CRAN="https://cloud.r-project.org/",
-		         SAM='https://fishfollower.r-universe.dev'))
+                     repos=c(CRAN="https://cloud.r-project.org/",
+                             SAM='https://fishfollower.r-universe.dev'))
   }
   
   installed_packages <- packages %in% rownames(installed.packages())
@@ -312,21 +312,21 @@ sw %>%
 ## Natural mortality
 
 ```{r}
-M <- 0.07
+M <- exp(-3)
 
 nm <- mo
 nm[nm != M] <- M
 ```
 
-Natural mortality was assumed as `r M` for all 
+Natural mortality was assumed as `r round(M, 3)` for all age groups and years. The value comes from the SCAA model (`exp(-3)`).
 
 ## Dummy datasets
 
-These dummy datasets contain only 0s or 1s encompassing the ages and years in the other datasets. They are used in the model where datasets with only 0s or 1s are required. 
+These dummy datasets contain only 0s (`dummy0`) or 1s (`dummy1`) encompassing the ages and years in the other datasets. They are used in the model where datasets with only 0s or 1s are required. 
 
 ```{r}
-#| label: tbl-dummy
-#| tbl-cap: Dummy dataset containing zeros.
+# #| label: tbl-dummy
+# #| tbl-cap: Dummy dataset containing zeros.
 
 dummy0 <- mo
 dummy0[dummy0 != 0] <- 0
@@ -337,5 +337,46 @@ dummy1[dummy1 == 0] <- 1
 # make_table(dummy0)
 ```
 
-
 # SAM
+
+## Setup SAM
+
+The current SAM data setup:
+
+```{r, collapse=FALSE}
+dat <- setup.sam.data(
+  surveys = surveys,
+  residual.fleets = cn, 
+  prop.mature = mo, 
+  stock.mean.weight = sw, 
+  catch.mean.weight = sw, 
+  dis.mean.weight = sw, 
+  land.mean.weight = sw,
+  prop.f = dummy0, 
+  prop.m = dummy0, 
+  natural.mortality = nm, 
+  land.frac = dummy1
+)
+```
+
+At the moment, the parameter setup is as simple as possible and has to be improved:
+
+```{r}
+conf <- stockassessment::defcon(dat)
+
+# conf$keyLogFpar <- matrix(c(rep(-1, ncol(conf$keyLogFpar)*2), rep(0, ncol(conf$keyLogFpar)*3)), byrow = TRUE, ncol = ncol(conf$keyLogFpar))
+
+conf
+
+par <- stockassessment::defpar(dat, conf)
+
+par
+```
+
+# The SAM model
+
+Once all the parameters and data are set up, fitting the model is as simple as:
+
+```{r echo = TRUE, eval = FALSE}
+fit <- sam.fit(dat, conf, par)
+```
