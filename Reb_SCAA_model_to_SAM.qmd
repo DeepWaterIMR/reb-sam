@@ -18,15 +18,18 @@ format:
     code-fold: true
     # output-file: Reb_SCAA_model_to_SAM_v1
     toc: true
+bibliography: "/Users/a22357/ownCloud/Workstuff/Literature/Mendeley/bibtex/zotero_library.bib"
+csl: "docs/ices_jms.csl"
 execute:
   message: false
   warning: false
+  cache: false
 editor_options: 
   chunk_output_type: console
 ---
 
 ```{r setup, eval = TRUE, include = FALSE}
-
+options(knitr.kable.NA = '')
 # knitr::opts_knit$set(root.dir = '../../') 
 
 knitr::knit_hooks$set(timeit = local({
@@ -108,13 +111,15 @@ theme_set(theme_cust) # Set default theme globally for the entire project
 
 # Introduction
 
-This document contains exploratory conversion of the Statistical Catch at Age (SCAA) model used in the assessment of the Northeast Arctic beaked redfish stock until 2024 to a SAM assessment model. 
+This document contains exploratory conversion of the [Statistical Catch at Age (SCAA) model](https://ices-library.figshare.com/articles/report/Report_of_the_Benchmark_Workshop_on_Redfish_Stocks_WKREDFISH_/19291142/1?file=36604434) [@ices2018] used in the assessment of the [Northeast Arctic beaked redfish stock](https://www.hi.no/en/hi/temasider/species/redfish/beaked-redfish-in-the-barents-and-norwegian-seas) until 2024 to a SAM assessment model. 
 
 # Data
 
 The data are reformatted from direct input data for the SCAA model. 
 
-## Catches
+## Datasets
+
+### Catches
 
 ```{r}
 #| label: fig-catches
@@ -158,7 +163,7 @@ lapply(seq_along(cn), function(i) {
 ## ####
 ```
 
-## Surveys
+### Surveys
 
 ```{r}
 #| label: fig-surveys
@@ -239,12 +244,12 @@ lapply(seq_along(surveys), function(i) {
 ## ####
 ```
 
-## Maturity
+### Maturity
 
 ```{r}
 #| label: fig-maturity
 #| fig-cap: Maturity proportions in the data. The proportions are assumed similar for all years.
-# #| fig-height: 8
+#| fig-height: 4
 
 ### Maturity proportion ####
 
@@ -252,6 +257,7 @@ mo <- read_table("data/from scaa model/MaturityAtAge.txt",
                  show_col_types = FALSE) %>% 
   column_to_rownames("Year") %>% 
   setNames(gsub("\\+", "", colnames(.))) %>% 
+  dplyr::select(-`0`, -`1`) %>% 
   as.matrix()
 
 ## ####
@@ -274,12 +280,12 @@ mo %>%
 ## ####
 ```
 
-## Weight
+### Weight
 
 ```{r}
 #| label: fig-weight-at-age
 #| fig-cap: Weight at age data. The proportions are assumed similar for all years.
-# #| fig-height: 8
+#| fig-height: 4
 
 ### Weight at age ####
 
@@ -287,6 +293,7 @@ sw <- read_table("data/from scaa model/WeightAtAge.txt",
                  show_col_types = FALSE) %>% 
   column_to_rownames("Year") %>% 
   setNames(gsub("\\+", "", colnames(.))) %>% 
+  dplyr::select(-`0`, -`1`) %>% 
   as.matrix()
 
 ## ####
@@ -309,7 +316,7 @@ sw %>%
 ## ####
 ```
 
-## Natural mortality
+### Natural mortality
 
 ```{r}
 M <- exp(-3)
@@ -320,9 +327,21 @@ nm[nm != M] <- M
 
 Natural mortality was assumed as `r round(M, 3)` for all age groups and years. The value comes from the SCAA model (`exp(-3)`).
 
-## Dummy datasets
+### Proportion females and males
 
-These dummy datasets contain only 0s (`dummy0`) or 1s (`dummy1`) encompassing the ages and years in the other datasets. They are used in the model where datasets with only 0s or 1s are required. 
+The `prop.f` and `prop.m` arguments are misleading as one would think that they define the proportion of sexes in the datasets. This, however, does not seem to be the case. According to A. Nielsen, these matrices are only used to calculate SSB and define the spawning time during the year with 0 being the beginning of the year and 1 the end of the year. In other words:
+
+$$SSB = \sum_{a=1}^{A} stock.weight_a \times prop.mature_a \times N_a \times exp(-prob.f_a \times F_a-prob.m \times M_a)$$
+
+In the initial run, these matrices were set to 0 indicating that spawning happened at the beginning of the year.
+
+### Landing fraction
+
+The `land.frac` matrix defines the fraction of the catch which was landed (i.e a way to define the proportion of discards). For the initial SAM run, it was assumed that all catch was landed. 
+
+### Dummy datasets
+
+These dummy datasets contain only 0s (`dummy0`) or 1s (`dummy1`) encompassing the ages and years in the other datasets. They were used in the model where datasets with only 0s or 1s were needed. 
 
 ```{r}
 # #| label: tbl-dummy
@@ -337,13 +356,49 @@ dummy1[dummy1 == 0] <- 1
 # make_table(dummy0)
 ```
 
+## Dataset dimensions
+
+The dimensions of the datasets define the number of years (rows) and age groups (columns) used in the model
+
+```{r}
+#| label: tbl-data-dim
+#| tbl-cap: Dataset dimensions influencing the automatic setup of SAM model during the following steps.
+
+tmp_fun <- function(x, i, name = NULL) {
+  tibble(
+    type = name,
+    subtype = names(x)[i],
+    rows = nrow(x[[i]]),
+    columns = ncol(x[[i]]),
+    year_range = paste0(rownames(x[[i]])[1], "-", rownames(x[[i]])[nrow(x[[i]])]),
+    age_range = paste0(colnames(x[[i]])[1], "-", colnames(x[[i]])[ncol(x[[i]])])
+    )
+}
+
+bind_rows(
+lapply(seq_along(cn), function(i) tmp_fun(cn, i, "catches")) %>% 
+  bind_rows(),
+lapply(seq_along(surveys), function(i) tmp_fun(surveys, i, "surveys")) %>% 
+  bind_rows(),
+tmp_fun(list(mo), 1, "maturity"),
+tmp_fun(list(sw), 1, "weight-at-age"),
+tmp_fun(list(nm), 1, "M"),
+tmp_fun(list(dummy0), 1, "dummy0"),
+tmp_fun(list(dummy1), 1, "dummy1")
+) %>% 
+  make_table()
+```
+
+
 # SAM
 
 ## Setup SAM
 
 The current SAM data setup:
 
-```{r, collapse=FALSE}
+```{r samsetup}
+#| code-fold: show
+
 dat <- setup.sam.data(
   surveys = surveys,
   residual.fleets = cn, 
@@ -361,22 +416,60 @@ dat <- setup.sam.data(
 
 At the moment, the parameter setup is as simple as possible and has to be improved:
 
-```{r}
+```{r confsam}
+#| code-fold: show
 conf <- stockassessment::defcon(dat)
 
-# conf$keyLogFpar <- matrix(c(rep(-1, ncol(conf$keyLogFpar)*2), rep(0, ncol(conf$keyLogFpar)*3)), byrow = TRUE, ncol = ncol(conf$keyLogFpar))
+# conf$keyLogFpar[conf$keyLogFpar != -1] <- 0
+
+# conf$keyLogFpar <- matrix(c(rep(-1, ncol(conf$keyLogFpar)*2), rep(0, ncol(conf$keyLogFpar)*4)), byrow = TRUE, ncol = ncol(conf$keyLogFpar))
 
 conf
+```
 
+Initial model parameters:
+
+```{r initialpar}
+#| code-fold: show
 par <- stockassessment::defpar(dat, conf)
 
 par
 ```
 
-# The SAM model
+## Fit the model
 
 Once all the parameters and data are set up, fitting the model is as simple as:
 
-```{r echo = TRUE, eval = FALSE}
+```{r}
+#| code-fold: show
+#| eval: false
+
 fit <- sam.fit(dat, conf, par)
 ```
+
+
+```{r fitsam}
+#| echo: false
+#| results: hide
+
+fit <- sam.fit(dat, conf, par, silent = TRUE)
+```
+
+Model convergence:
+
+```{r echo = TRUE, collapse=FALSE}
+fit
+```
+
+## Model parameters
+
+```{r}
+#| label: tbl-model-parameters
+#| tbl-cap: SAM model parameters. The par column gives the estimated value, sd(par) the standard deviation, exp(par), Low and High the model parameter toget
+
+partable(fit) %>% 
+  as_tibble(rownames = "parameter") %>% 
+  make_table(digits = 2)
+```
+
+# References
